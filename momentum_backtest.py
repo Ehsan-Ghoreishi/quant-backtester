@@ -1,0 +1,156 @@
+"""
+Momentum (Trend-Following) Strategy Backtest
+============================================
+The opposite logic of mean-reversion: go LONG when the recent trend is
+up, go FLAT when it turns down. Hypothesis: on a trending asset like the
+Dow Jones, momentum should behave very differently from mean-reversion.
+
+Same backtest engine, metrics, costs, and train/test split as the
+mean-reversion project, so the two are directly comparable.
+
+Author: Ehsan Ghoreishi
+
+How to run locally:
+    pip install yfinance pandas numpy matplotlib
+    python momentum_backtest.py
+"""
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+# ----------------------------------------------------------------------
+# 1. DATA  (identical loader so results are comparable)
+# ----------------------------------------------------------------------
+def load_prices(ticker: str = "^DJI", years: int = 8) -> pd.Series:
+    try:
+        import yfinance as yf
+        df = yf.download(ticker, period=f"{years}y", auto_adjust=True, progress=False)
+        prices = df["Close"].dropna()
+        if len(prices) > 100:
+            print(f"Loaded {len(prices)} real bars for {ticker}")
+            return prices.squeeze()
+        raise ValueError("Not enough data returned")
+    except Exception as e:
+        print(f"[fallback] yfinance unavailable ({e}); using synthetic data")
+        return _synthetic_prices(years)
+
+
+def _synthetic_prices(years: int) -> pd.Series:
+    rng = np.random.default_rng(42)
+    n = years * 252
+    dates = pd.bdate_range(end=pd.Timestamp.today(), periods=n)
+    drift = 0.0003
+    shocks = rng.normal(0, 0.01, n)
+    ar = np.zeros(n)
+    for i in range(1, n):
+        ar[i] = 0.15 * ar[i - 1] + shocks[i]
+    log_ret = drift + ar
+    price = 20000 * np.exp(np.cumsum(log_ret))
+    return pd.Series(price, index=dates, name="Close")
+
+
+# ----------------------------------------------------------------------
+# 2. STRATEGY  (this is the only real difference vs mean-reversion)
+# ----------------------------------------------------------------------
+def generate_signals(prices: pd.Series, fast: int = 50, slow: int = 200) -> pd.Series:
+    """
+    Moving-average crossover momentum:
+      - LONG (+1) when fast MA is above slow MA  -> uptrend
+      - FLAT (0)  when fast MA is below slow MA   -> downtrend
+
+    We go flat (not short) in downtrends, which is a common, more
+    conservative momentum variant.
+
+    Signals are shifted by 1 day to avoid look-ahead bias.
+    """
+    fast_ma = prices.rolling(fast).mean()
+    slow_ma = prices.rolling(slow).mean()
+
+    position = (fast_ma > slow_ma).astype(float)   # 1 when uptrend, else 0
+    position[fast_ma.isna() | slow_ma.isna()] = 0  # no signal until both MAs exist
+
+    return position.shift(1).fillna(0)
+
+
+# ----------------------------------------------------------------------
+# 3. BACKTEST  (shared engine)
+# ----------------------------------------------------------------------
+def backtest(prices: pd.Series, position: pd.Series, cost_bps: float = 2.0) -> pd.DataFrame:
+    ret = prices.pct_change().fillna(0)
+    strat_ret = position * ret
+    trades = position.diff().abs().fillna(0)
+    cost = trades * (cost_bps / 10000.0)
+    strat_ret_net = strat_ret - cost
+
+    out = pd.DataFrame({
+        "price": prices,
+        "position": position,
+        "market_ret": ret,
+        "strat_ret": strat_ret_net,
+    })
+    out["strat_equity"] = (1 + out["strat_ret"]).cumprod()
+    out["market_equity"] = (1 + out["market_ret"]).cumprod()
+    return out
+
+
+# ----------------------------------------------------------------------
+# 4. METRICS  (shared)
+# ----------------------------------------------------------------------
+def metrics(returns: pd.Series, freq: int = 252) -> dict:
+    r = returns.dropna()
+    total = (1 + r).prod() - 1
+    ann_ret = (1 + r).prod() ** (freq / len(r)) - 1 if len(r) else 0
+    ann_vol = r.std() * np.sqrt(freq)
+    sharpe = ann_ret / ann_vol if ann_vol > 0 else 0
+    equity = (1 + r).cumprod()
+    drawdown = equity / equity.cummax() - 1
+    max_dd = drawdown.min()
+    return {
+        "Total Return": f"{total:.1%}",
+        "Annualized Return": f"{ann_ret:.1%}",
+        "Annualized Vol": f"{ann_vol:.1%}",
+        "Sharpe": f"{sharpe:.2f}",
+        "Max Drawdown": f"{max_dd:.1%}",
+    }
+
+
+def train_test_split(prices: pd.Series, split: float = 0.7):
+    cut = int(len(prices) * split)
+    return prices.iloc[:cut], prices.iloc[cut:]
+
+
+# ----------------------------------------------------------------------
+# MAIN
+# ----------------------------------------------------------------------
+def main():
+    prices = load_prices("^DJI", years=8)
+    train, test = train_test_split(prices, split=0.7)
+    params = dict(fast=50, slow=200)
+
+    print("\n=== IN-SAMPLE (train) ===")
+    bt_tr = backtest(train, generate_signals(train, **params))
+    for k, v in metrics(bt_tr["strat_ret"]).items():
+        print(f"  {k:<20} {v}")
+
+    print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
+    bt_te = backtest(test, generate_signals(test, **params))
+    for k, v in metrics(bt_te["strat_ret"]).items():
+        print(f"  {k:<20} {v}")
+    print("\n  Buy & Hold (test) for comparison:")
+    for k, v in metrics(bt_te["market_ret"]).items():
+        print(f"  {k:<20} {v}")
+
+    plt.figure(figsize=(11, 6))
+    plt.plot(bt_te.index, bt_te["strat_equity"], label="Momentum Strategy")
+    plt.plot(bt_te.index, bt_te["market_equity"], label="Buy & Hold", alpha=0.7)
+    plt.title("Out-of-Sample Equity Curve — Momentum")
+    plt.xlabel("Date"); plt.ylabel("Growth of $1")
+    plt.legend(); plt.grid(alpha=0.3); plt.tight_layout()
+    plt.savefig("equity_curve_momentum.png", dpi=120)
+    print("\nSaved chart -> equity_curve_momentum.png")
+
+
+if __name__ == "__main__":
+    main()
