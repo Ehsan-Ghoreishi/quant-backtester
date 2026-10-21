@@ -1,7 +1,9 @@
+from itertools import pairwise
+
 import pandas as pd
 import pytest
 
-from backtester.engine import backtest, split_backtest, train_test_split
+from backtester.engine import backtest, split_backtest, train_test_split, walk_forward
 
 
 def _series(values):
@@ -45,3 +47,18 @@ def test_split_backtest_keeps_warmed_up_positions(prices):
     position = pd.Series(1.0, index=prices.index)
     _, bt_te = split_backtest(prices, position, split=0.5)
     assert (bt_te["position"] == 1).all()
+
+
+def test_walk_forward_folds_cover_history_after_first_block(prices):
+    position = pd.Series(0.0, index=prices.index)
+    folds = walk_forward(prices, position, n_folds=4)
+    assert len(folds) == 4
+    for a, b in pairwise(folds):
+        assert a.index.max() < b.index.min()
+    assert folds[-1].index[-1] == prices.index[-1]
+    assert sum(len(f) for f in folds) == len(prices) - len(prices) // 5
+
+
+def test_walk_forward_rejects_zero_folds(prices):
+    with pytest.raises(ValueError):
+        walk_forward(prices, prices * 0, n_folds=0)

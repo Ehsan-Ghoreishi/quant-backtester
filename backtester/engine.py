@@ -1,5 +1,8 @@
 """Vectorized backtest engine shared by every strategy."""
 
+from itertools import pairwise
+
+import numpy as np
 import pandas as pd
 
 
@@ -53,3 +56,24 @@ def split_backtest(prices: pd.Series, position: pd.Series, split: float = 0.7,
     train, test = train_test_split(prices, split)
     return (backtest(train, position.loc[train.index], cost_bps),
             backtest(test, position.loc[test.index], cost_bps))
+
+
+def walk_forward(prices: pd.Series, position: pd.Series, n_folds: int = 5,
+                 cost_bps: float = 2.0) -> list[pd.DataFrame]:
+    """
+    Split history into `n_folds + 1` consecutive blocks and backtest every
+    block after the first one on its own.
+
+    The first block is reserved as warm-up / "training" history. Because
+    the strategies here use fixed parameters, this is a stability check:
+    one 70/30 split can be lucky, while consistent results across several
+    market periods are much harder to get by chance.
+    """
+    if n_folds < 1:
+        raise ValueError("n_folds must be at least 1")
+    bounds = np.linspace(0, len(prices), n_folds + 2).astype(int)
+    folds = []
+    for start, end in pairwise(bounds[1:]):
+        block = prices.iloc[start:end]
+        folds.append(backtest(block, position.loc[block.index], cost_bps))
+    return folds

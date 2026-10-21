@@ -6,7 +6,7 @@ from collections.abc import Callable
 import pandas as pd
 
 from backtester.data import load_prices
-from backtester.engine import split_backtest
+from backtester.engine import split_backtest, walk_forward
 from backtester.metrics import metrics, print_metrics
 from backtester.plotting import plot_equity
 
@@ -23,6 +23,8 @@ def base_parser(description: str, default_output: str) -> argparse.ArgumentParse
                    help="transaction cost per unit of turnover, in bps")
     p.add_argument("--no-fallback", action="store_true",
                    help="fail instead of using synthetic data when the download fails")
+    p.add_argument("--walk-forward", type=int, default=0, metavar="N",
+                   help="also report results for N consecutive out-of-sample periods")
     p.add_argument("--output", default=default_output, help="path of the equity-curve chart")
     return p
 
@@ -47,6 +49,22 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
     print("\n  Buy & Hold (test) for comparison:")
     print_metrics(metrics(bt_te["market_ret"]))
 
+    if args.walk_forward:
+        print_walk_forward(walk_forward(prices, position, args.walk_forward, args.cost_bps))
+
     source = "SYNTHETIC data" if synthetic else args.ticker
     plot_equity(bt_te, label, f"Out-of-Sample Equity Curve — {label} ({source})", args.output)
     print(f"\nSaved chart -> {args.output}")
+
+
+def print_walk_forward(folds: list[pd.DataFrame]) -> None:
+    print(f"\n=== WALK-FORWARD ({len(folds)} periods) ===")
+    print(f"  {'Period':<25} {'Strategy':>10} {'Buy&Hold':>10} {'Sharpe':>8}")
+    wins = 0
+    for bt in folds:
+        strat, market = metrics(bt["strat_ret"]), metrics(bt["market_ret"])
+        wins += strat["Sharpe"] > market["Sharpe"]
+        period = f"{bt.index[0]:%Y-%m-%d} to {bt.index[-1]:%Y-%m-%d}"
+        print(f"  {period:<25} {strat['Total Return']:>10.1%} "
+              f"{market['Total Return']:>10.1%} {strat['Sharpe']:>8.2f}")
+    print(f"  Strategy beat buy & hold (Sharpe) in {wins}/{len(folds)} periods")
