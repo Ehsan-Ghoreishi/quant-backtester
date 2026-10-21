@@ -8,6 +8,7 @@ env/
 # Outputs
 .cache/
 *.png
+!docs/*.png
 *.csv
 
 # OS / editor

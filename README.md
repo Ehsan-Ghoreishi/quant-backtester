@@ -56,6 +56,15 @@ numbers below are for the out-of-sample test period
 | Sharpe | -0.39 | +0.64 | +0.96 |
 | Max Drawdown | -20.5% | -16.4% | -16.4% |
 
+![Momentum vs buy & hold, out-of-sample](docs/equity_curve_momentum.png)
+
+The chart shows the typical cost of trend-following: momentum tracks
+the market, steps aside after the April 2025 sell-off, and then misses
+most of the rebound because the 50/200 crossover only turns positive
+again in August. Lower risk in the crash, but a permanent gap in return.
+The mean-reversion chart is in
+[`docs/equity_curve_mean_reversion.png`](docs/equity_curve_mean_reversion.png).
+
 Walk-forward check (`--walk-forward 5`, five consecutive ~16-month
 periods): momentum beat buy & hold on Sharpe in 1 of 5 periods, and so
 did mean-reversion.
