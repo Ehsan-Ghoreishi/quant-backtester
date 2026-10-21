@@ -19,36 +19,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-
-# ----------------------------------------------------------------------
-# 1. DATA  (identical loader so results are comparable)
-# ----------------------------------------------------------------------
-def load_prices(ticker: str = "^DJI", years: int = 8) -> pd.Series:
-    try:
-        import yfinance as yf
-        df = yf.download(ticker, period=f"{years}y", auto_adjust=True, progress=False)
-        prices = df["Close"].dropna()
-        if len(prices) > 100:
-            print(f"Loaded {len(prices)} real bars for {ticker}")
-            return prices.squeeze()
-        raise ValueError("Not enough data returned")
-    except Exception as e:
-        print(f"[fallback] yfinance unavailable ({e}); using synthetic data")
-        return _synthetic_prices(years)
-
-
-def _synthetic_prices(years: int) -> pd.Series:
-    rng = np.random.default_rng(42)
-    n = years * 252
-    dates = pd.bdate_range(end=pd.Timestamp.today(), periods=n)
-    drift = 0.0003
-    shocks = rng.normal(0, 0.01, n)
-    ar = np.zeros(n)
-    for i in range(1, n):
-        ar[i] = 0.15 * ar[i - 1] + shocks[i]
-    log_ret = drift + ar
-    price = 20000 * np.exp(np.cumsum(log_ret))
-    return pd.Series(price, index=dates, name="Close")
+from backtester.data import load_prices
 
 
 # ----------------------------------------------------------------------
