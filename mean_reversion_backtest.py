@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 from backtester.data import load_prices
 from backtester.engine import backtest, train_test_split
-from backtester.metrics import metrics
+from backtester.metrics import metrics, print_metrics
 from backtester.strategies import mean_reversion_signals as generate_signals
 
 
@@ -34,17 +34,14 @@ def main():
     print("\n=== IN-SAMPLE (train) ===")
     pos_tr = generate_signals(train, **params)
     bt_tr = backtest(train, pos_tr)
-    for k, v in metrics(bt_tr["strat_ret"]).items():
-        print(f"  {k:<20} {v}")
+    print_metrics(metrics(bt_tr["strat_ret"]))
 
     print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
     pos_te = generate_signals(test, **params)
     bt_te = backtest(test, pos_te)
-    for k, v in metrics(bt_te["strat_ret"]).items():
-        print(f"  {k:<20} {v}")
+    print_metrics(metrics(bt_te["strat_ret"]))
     print("\n  Buy & Hold (test) for comparison:")
-    for k, v in metrics(bt_te["market_ret"]).items():
-        print(f"  {k:<20} {v}")
+    print_metrics(metrics(bt_te["market_ret"]))
 
     # Plot out-of-sample equity curves
     plt.figure(figsize=(11, 6))

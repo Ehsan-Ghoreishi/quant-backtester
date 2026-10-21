@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 
 from backtester.data import load_prices
 from backtester.engine import backtest, train_test_split
-from backtester.metrics import metrics
+from backtester.metrics import metrics, print_metrics
 from backtester.strategies import momentum_signals as generate_signals
 
 
@@ -33,16 +33,13 @@ def main():
 
     print("\n=== IN-SAMPLE (train) ===")
     bt_tr = backtest(train, generate_signals(train, **params))
-    for k, v in metrics(bt_tr["strat_ret"]).items():
-        print(f"  {k:<20} {v}")
+    print_metrics(metrics(bt_tr["strat_ret"]))
 
     print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
     bt_te = backtest(test, generate_signals(test, **params))
-    for k, v in metrics(bt_te["strat_ret"]).items():
-        print(f"  {k:<20} {v}")
+    print_metrics(metrics(bt_te["strat_ret"]))
     print("\n  Buy & Hold (test) for comparison:")
-    for k, v in metrics(bt_te["market_ret"]).items():
-        print(f"  {k:<20} {v}")
+    print_metrics(metrics(bt_te["market_ret"]))
 
     plt.figure(figsize=(11, 6))
     plt.plot(bt_te.index, bt_te["strat_equity"], label="Momentum Strategy")
