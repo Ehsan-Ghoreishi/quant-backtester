@@ -17,7 +17,7 @@ How to run locally:
 import matplotlib.pyplot as plt
 
 from backtester.data import load_prices
-from backtester.engine import backtest, train_test_split
+from backtester.engine import split_backtest
 from backtester.metrics import metrics, print_metrics
 from backtester.strategies import mean_reversion_signals as generate_signals
 
@@ -27,18 +27,14 @@ from backtester.strategies import mean_reversion_signals as generate_signals
 # ----------------------------------------------------------------------
 def main():
     prices = load_prices("^DJI", years=8)
-    train, test = train_test_split(prices, split=0.7)
 
     params = dict(lookback=20, entry_z=1.0, exit_z=0.0)
+    bt_tr, bt_te = split_backtest(prices, generate_signals(prices, **params), split=0.7)
 
     print("\n=== IN-SAMPLE (train) ===")
-    pos_tr = generate_signals(train, **params)
-    bt_tr = backtest(train, pos_tr)
     print_metrics(metrics(bt_tr["strat_ret"]))
 
     print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
-    pos_te = generate_signals(test, **params)
-    bt_te = backtest(test, pos_te)
     print_metrics(metrics(bt_te["strat_ret"]))
     print("\n  Buy & Hold (test) for comparison:")
     print_metrics(metrics(bt_te["market_ret"]))

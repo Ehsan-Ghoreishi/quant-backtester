@@ -12,8 +12,10 @@ def backtest(prices: pd.Series, position: pd.Series,
     ret = prices.pct_change().fillna(0)
     strat_ret = position * ret
 
-    # cost applied whenever position changes
-    trades = position.diff().abs().fillna(0)
+    # cost applied whenever position changes, including the very first
+    # bar when the series starts already invested (e.g. a test slice that
+    # inherits a position from the end of the training period)
+    trades = position.diff().abs().fillna(position.abs())
     cost = trades * (cost_bps / 10000.0)
     strat_ret_net = strat_ret - cost
 
@@ -35,3 +37,19 @@ def train_test_split(prices: pd.Series, split: float = 0.7):
     """
     cut = int(len(prices) * split)
     return prices.iloc[:cut], prices.iloc[cut:]
+
+
+def split_backtest(prices: pd.Series, position: pd.Series, split: float = 0.7,
+                   cost_bps: float = 2.0):
+    """
+    Backtest the train and test periods separately.
+
+    `position` must be computed on the FULL price history. Indicators
+    such as a 200-day moving average only use past data, so this leaks
+    nothing from the future, but it does let the test period start with
+    warmed-up indicators. Recomputing signals on the test slice alone
+    would force the strategy to sit flat for its whole warm-up window.
+    """
+    train, test = train_test_split(prices, split)
+    return (backtest(train, position.loc[train.index], cost_bps),
+            backtest(test, position.loc[test.index], cost_bps))
