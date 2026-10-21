@@ -16,6 +16,7 @@ from backtester.metrics import (
     trade_stats,
 )
 from backtester.plotting import plot_equity
+from backtester.results import save_results
 from backtester.sizing import vol_target
 
 
@@ -41,6 +42,8 @@ def base_parser(description: str, default_output: str) -> argparse.ArgumentParse
                    help="scale positions to this annualized volatility, e.g. 0.10")
     p.add_argument("--max-leverage", type=float, default=1.0,
                    help="cap on exposure when --vol-target is used")
+    p.add_argument("--save-results", metavar="DIR", default=None,
+                   help="write a JSON summary and the daily test backtest (CSV) to DIR")
     p.add_argument("--output", default=default_output, help="path of the equity-curve chart")
     return p
 
@@ -88,6 +91,13 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
         for chosen, bt in tuned:
             print(f"  {bt.index[0]:%Y-%m-%d}: chose {chosen}")
         print_walk_forward([bt for _, bt in tuned], title="RE-TUNED WALK-FORWARD")
+
+    if args.save_results:
+        settings = {"ticker": args.ticker, "synthetic_data": synthetic, "years": args.years,
+                    "split": args.split, "cost_bps": args.cost_bps,
+                    "vol_target": args.vol_target, "params": params}
+        for path in save_results(args.save_results, label, settings, bt_tr, bt_te):
+            print(f"Saved results -> {path}")
 
     source = "SYNTHETIC data" if synthetic else args.ticker
     plot_equity(bt_te, label, f"Out-of-Sample Equity Curve — {label} ({source})", args.output)
