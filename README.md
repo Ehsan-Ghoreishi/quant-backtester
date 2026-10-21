@@ -60,6 +60,14 @@ Walk-forward check (`--walk-forward 5`, five consecutive ~16-month
 periods): momentum beat buy & hold on Sharpe in 1 of 5 periods, and so
 did mean-reversion.
 
+Re-tuning inside each walk-forward training window (`--walk-forward 5
+--optimize`: every period uses the parameter set with the best Sharpe on
+all earlier data, from a small grid) gives a mixed picture. For momentum
+the average Sharpe over the five periods stays the same (0.29 with
+re-tuning and with the default 50/200). For mean-reversion it rises from
+-0.34 to +0.45, but almost all of that gain comes from a single period
+(2021-22, Sharpe 1.80), so it is weak evidence, not a discovery.
+
 Multi-asset check (`python compare_assets.py`, out-of-sample Sharpe,
 same parameters everywhere):
 
@@ -148,6 +156,8 @@ Every setting is a command-line option (`--help` lists them all):
 python momentum_backtest.py --ticker SPY --years 15 --fast 20 --slow 100
 python mean_reversion_backtest.py --ticker QQQ --entry-z 1.5 --cost-bps 5
 python momentum_backtest.py --walk-forward 5
+python mean_reversion_backtest.py --walk-forward 5 --optimize
+python compare_assets.py --tickers SPY QQQ GLD
 ```
 
 ## Development
@@ -175,7 +185,8 @@ ruff check .
       (feature engineering from price/volatility, proper CV).
 - [x] Multi-asset testing to check robustness.
 - [x] Walk-forward validation across several periods.
-- [ ] Parameter optimisation inside each walk-forward training window.
+- [x] Parameter optimisation inside each walk-forward training window.
+- [ ] Volatility-targeted position sizing instead of all-in / all-out.
 
 ## Disclaimer
 

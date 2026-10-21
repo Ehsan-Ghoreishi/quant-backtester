@@ -1,9 +1,12 @@
 """Vectorized backtest engine shared by every strategy."""
 
+from collections.abc import Callable
 from itertools import pairwise
 
 import numpy as np
 import pandas as pd
+
+from backtester.metrics import metrics
 
 
 def backtest(prices: pd.Series, position: pd.Series,
@@ -77,3 +80,36 @@ def walk_forward(prices: pd.Series, position: pd.Series, n_folds: int = 5,
         block = prices.iloc[start:end]
         folds.append(backtest(block, position.loc[block.index], cost_bps))
     return folds
+
+
+def optimized_walk_forward(prices: pd.Series, signal_fn: Callable[..., pd.Series],
+                           grid: list[dict], n_folds: int = 5, cost_bps: float = 2.0):
+    """
+    Walk-forward with parameter selection.
+
+    For every out-of-sample block, each parameter set in `grid` is scored
+    by its Sharpe ratio on ALL history before that block (an expanding
+    training window). Only the winner is then run on the block. The
+    parameters are never chosen with data from the period they are
+    judged on, which is what makes this an honest test of the tuning.
+
+    Returns a list of (chosen_params, backtest_of_block) tuples.
+    """
+    if n_folds < 1:
+        raise ValueError("n_folds must be at least 1")
+    if not grid:
+        raise ValueError("grid must contain at least one parameter set")
+
+    positions = [signal_fn(prices, **params) for params in grid]
+    bounds = np.linspace(0, len(prices), n_folds + 2).astype(int)
+    results = []
+    for start, end in pairwise(bounds[1:]):
+        history = prices.iloc[:start]
+        scores = [
+            metrics(backtest(history, pos.loc[history.index], cost_bps)["strat_ret"])["Sharpe"]
+            for pos in positions
+        ]
+        best = int(np.argmax(scores))
+        block = prices.iloc[start:end]
+        results.append((grid[best], backtest(block, positions[best].loc[block.index], cost_bps)))
+    return results

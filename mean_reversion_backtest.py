@@ -26,7 +26,9 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     params = dict(lookback=args.lookback, entry_z=args.entry_z, exit_z=args.exit_z)
-    run(args, mean_reversion_signals, params, label="Mean-Reversion")
+    grid = [dict(lookback=lb, entry_z=z, exit_z=0.0)
+            for lb in (10, 20, 40) for z in (0.5, 1.0, 1.5, 2.0)]
+    run(args, mean_reversion_signals, params, label="Mean-Reversion", grid=grid)
 
 
 if __name__ == "__main__":

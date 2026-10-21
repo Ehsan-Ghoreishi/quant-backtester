@@ -1,9 +1,16 @@
 from itertools import pairwise
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.engine import backtest, split_backtest, train_test_split, walk_forward
+from backtester.engine import (
+    backtest,
+    optimized_walk_forward,
+    split_backtest,
+    train_test_split,
+    walk_forward,
+)
 
 
 def _series(values):
@@ -62,3 +69,29 @@ def test_walk_forward_folds_cover_history_after_first_block(prices):
 def test_walk_forward_rejects_zero_folds(prices):
     with pytest.raises(ValueError):
         walk_forward(prices, prices * 0, n_folds=0)
+
+
+def test_optimized_walk_forward_picks_best_in_sample_params(prices):
+    # "always long" vs "always flat" on a steadily rising price: long must win
+    rising = pd.Series(np.linspace(100, 200, len(prices)), index=prices.index)
+
+    def signal_fn(p, level):
+        return pd.Series(level, index=p.index)
+
+    results = optimized_walk_forward(rising, signal_fn, [dict(level=0.0), dict(level=1.0)],
+                                     n_folds=3)
+    assert [chosen for chosen, _ in results] == [dict(level=1.0)] * 3
+
+
+def test_optimized_walk_forward_does_not_use_the_block_it_is_judged_on(prices):
+    # up during history, down afterwards: in-sample choice must still be "long"
+    n = len(prices)
+    path = np.r_[np.linspace(100, 200, n // 2), np.linspace(200, 100, n - n // 2)]
+    series = pd.Series(path, index=prices.index)
+
+    def signal_fn(p, level):
+        return pd.Series(level, index=p.index)
+
+    (chosen, _), *_ = optimized_walk_forward(series, signal_fn,
+                                             [dict(level=0.0), dict(level=1.0)], n_folds=1)
+    assert chosen == dict(level=1.0)

@@ -27,7 +27,8 @@ def main(argv=None):
     if args.fast >= args.slow:
         p.error("--fast must be shorter than --slow")
 
-    run(args, momentum_signals, dict(fast=args.fast, slow=args.slow), label="Momentum")
+    grid = [dict(fast=f, slow=s) for f in (10, 20, 50) for s in (100, 150, 200)]
+    run(args, momentum_signals, dict(fast=args.fast, slow=args.slow), label="Momentum", grid=grid)
 
 
 if __name__ == "__main__":
