@@ -60,6 +60,17 @@ Walk-forward check (`--walk-forward 5`, five consecutive ~16-month
 periods): momentum beat buy & hold on Sharpe in 1 of 5 periods, and so
 did mean-reversion.
 
+Multi-asset check (`python compare_assets.py`, out-of-sample Sharpe,
+same parameters everywhere):
+
+| Asset | Mean-Reversion | Momentum | Buy & Hold |
+|---|---|---|---|
+| ^DJI (Dow Jones) | -0.39 | 0.64 | 0.96 |
+| SPY (S&P 500) | 0.22 | 0.75 | 1.14 |
+| QQQ (Nasdaq 100) | -0.01 | 0.75 | 1.02 |
+| IWM (Russell 2000) | -0.13 | 0.72 | 0.76 |
+| GLD (Gold) | -0.31 | 1.13 | 1.12 |
+
 **Key findings:**
 
 - Momentum outperformed mean-reversion on the trending Dow, confirming
@@ -67,6 +78,9 @@ did mean-reversion.
   while mean-reversion is structurally the wrong tool for it.
 - Neither simple strategy beat buy-and-hold — a realistic, well-documented
   outcome. Beating the market is hard, and most simple rules don't.
+- The pattern holds across assets: momentum has a positive Sharpe on
+  all five, mean-reversion on only one, and only momentum on gold
+  roughly ties buy & hold (1.13 vs 1.12).
 - Mean-reversion lost money in 4 of 5 walk-forward periods, so its poor
   result is not an accident of where the train/test cut falls.
 - Fixing a warm-up bug (see below) raised momentum's out-of-sample
@@ -107,6 +121,7 @@ backtester/
 tests/           pytest suite (incl. an automated look-ahead-bias test)
 mean_reversion_backtest.py
 momentum_backtest.py
+compare_assets.py   runs both strategies on several assets
 ```
 
 ## Tech stack
@@ -158,7 +173,7 @@ ruff check .
 
 - [ ] Replace the hand-coded z-score rule with an ML classifier
       (feature engineering from price/volatility, proper CV).
-- [ ] Multi-asset testing to check robustness.
+- [x] Multi-asset testing to check robustness.
 - [x] Walk-forward validation across several periods.
 - [ ] Parameter optimisation inside each walk-forward training window.
 
