@@ -24,7 +24,8 @@ def metrics(returns: pd.Series, freq: int = 252, risk_free: float = 0.0) -> dict
 
     excess = r - risk_free / freq
     std = excess.std()
-    sharpe = excess.mean() / std * np.sqrt(freq) if std > 0 else 0.0
+    # treat float noise around zero volatility as zero (Sharpe undefined)
+    sharpe = excess.mean() / std * np.sqrt(freq) if std > 1e-12 else 0.0
 
     equity = (1 + r).cumprod()
     drawdown = equity / equity.cummax() - 1
