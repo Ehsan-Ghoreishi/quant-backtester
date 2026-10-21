@@ -1,12 +1,12 @@
 """Equity-curve charts."""
 
-import matplotlib
+import pandas as pd
+from matplotlib.figure import Figure
+from matplotlib.ticker import PercentFormatter
 
-matplotlib.use("Agg")  # charts are only saved to disk; works without a display
-
-import matplotlib.pyplot as plt  # noqa: E402
-import pandas as pd  # noqa: E402
-from matplotlib.ticker import PercentFormatter  # noqa: E402
+# Charts are built with Figure() instead of pyplot: that needs no GUI
+# backend (works on headless servers and CI) and, unlike forcing the "Agg"
+# backend at import time, does not break inline plots in Jupyter.
 
 
 def drawdown(equity: pd.Series) -> pd.Series:
@@ -16,8 +16,8 @@ def drawdown(equity: pd.Series) -> pd.Series:
 
 def plot_equity(bt: pd.DataFrame, label: str, title: str, path: str) -> None:
     """Save strategy vs buy-and-hold equity curves with a drawdown panel below."""
-    fig, (ax, ax_dd) = plt.subplots(2, 1, figsize=(11, 8), sharex=True,
-                                    gridspec_kw={"height_ratios": [3, 1]})
+    fig = Figure(figsize=(11, 8))
+    ax, ax_dd = fig.subplots(2, 1, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
     ax.plot(bt.index, bt["strat_equity"], label=label)
     ax.plot(bt.index, bt["market_equity"], label="Buy & Hold", alpha=0.7)
     ax.set_title(title)
@@ -35,4 +35,3 @@ def plot_equity(bt: pd.DataFrame, label: str, title: str, path: str) -> None:
 
     fig.tight_layout()
     fig.savefig(path, dpi=120)
-    plt.close(fig)
