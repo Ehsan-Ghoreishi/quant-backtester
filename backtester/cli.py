@@ -15,6 +15,7 @@ from backtester.metrics import (
     trade_stats,
 )
 from backtester.plotting import plot_equity
+from backtester.sizing import vol_target
 
 
 def base_parser(description: str, default_output: str) -> argparse.ArgumentParser:
@@ -33,6 +34,10 @@ def base_parser(description: str, default_output: str) -> argparse.ArgumentParse
                    help="also report results for N consecutive out-of-sample periods")
     p.add_argument("--optimize", action="store_true",
                    help="with --walk-forward: re-tune parameters on each training window")
+    p.add_argument("--vol-target", type=float, default=None, metavar="VOL",
+                   help="scale positions to this annualized volatility, e.g. 0.10")
+    p.add_argument("--max-leverage", type=float, default=1.0,
+                   help="cap on exposure when --vol-target is used")
     p.add_argument("--output", default=default_output, help="path of the equity-curve chart")
     return p
 
@@ -48,9 +53,12 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
     prices = load_prices(args.ticker, years=args.years, fallback=not args.no_fallback)
     synthetic = prices.attrs.get("source") == "synthetic"
     position = signal_fn(prices, **params)
+    if args.vol_target:
+        position = vol_target(position, prices, args.vol_target, max_leverage=args.max_leverage)
     bt_tr, bt_te = split_backtest(prices, position, split=args.split, cost_bps=args.cost_bps)
 
-    print(f"\nParameters: {params}, cost {args.cost_bps} bps")
+    sizing = f", vol target {args.vol_target:.0%}" if args.vol_target else ""
+    print(f"\nParameters: {params}, cost {args.cost_bps} bps{sizing}")
     print("\n=== IN-SAMPLE (train) ===")
     print_metrics(metrics(bt_tr["strat_ret"]))
 
