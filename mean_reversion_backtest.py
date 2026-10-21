@@ -20,9 +20,9 @@ from backtester.strategies import mean_reversion_signals
 
 def main(argv=None):
     p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve.png")
-    p.add_argument("--lookback", type=int, default=20, help="rolling window in days (default: 20)")
-    p.add_argument("--entry-z", type=float, default=1.0, help="z-score to open a trade (default: 1.0)")
-    p.add_argument("--exit-z", type=float, default=0.0, help="z-score to close a trade (default: 0.0)")
+    p.add_argument("--lookback", type=int, default=20, help="rolling window in days")
+    p.add_argument("--entry-z", type=float, default=1.0, help="z-score to open a trade")
+    p.add_argument("--exit-z", type=float, default=0.0, help="z-score to close a trade")
     args = p.parse_args(argv)
 
     params = dict(lookback=args.lookback, entry_z=args.entry_z, exit_z=args.exit_z)

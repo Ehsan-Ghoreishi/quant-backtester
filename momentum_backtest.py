@@ -21,8 +21,8 @@ from backtester.strategies import momentum_signals
 
 def main(argv=None):
     p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve_momentum.png")
-    p.add_argument("--fast", type=int, default=50, help="fast moving average in days (default: 50)")
-    p.add_argument("--slow", type=int, default=200, help="slow moving average in days (default: 200)")
+    p.add_argument("--fast", type=int, default=50, help="fast moving average in days")
+    p.add_argument("--slow", type=int, default=200, help="slow moving average in days")
     args = p.parse_args(argv)
     if args.fast >= args.slow:
         p.error("--fast must be shorter than --slow")
