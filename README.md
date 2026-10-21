@@ -43,15 +43,22 @@ Every strategy is evaluated under the same disciplined rules:
 
 ## Results (Dow Jones, ^DJI, out-of-sample)
 
-Both strategies were tested on ~8 years of real Dow Jones data
-(out-of-sample / test period):
+Both strategies were tested on 8 years of daily Dow Jones data
+(2018-10-22 to 2026-10-21). The first 70% is the training period; the
+numbers below are for the out-of-sample test period
+(2024-05-28 to 2026-10-21), with 2 bps transaction costs:
 
 | Metric | Mean-Reversion | Momentum | Buy & Hold |
 |---|---|---|---|
-| Total Return | -16.4% | +6.8% | +36.9% |
-| Annualized Return | -7.2% | +2.8% | +14.0% |
-| Sharpe | -0.56 | +0.23 | +0.98 |
-| Max Drawdown | -20.1% | -16.4% | -16.4% |
+| Total Return | -13.4% | +20.7% | +35.9% |
+| Annualized Return | -5.8% | +8.2% | +13.7% |
+| Annualized Volatility | 13.2% | 13.7% | 14.5% |
+| Sharpe | -0.39 | +0.64 | +0.96 |
+| Max Drawdown | -20.5% | -16.4% | -16.4% |
+
+Walk-forward check (`--walk-forward 5`, five consecutive ~16-month
+periods): momentum beat buy & hold on Sharpe in 1 of 5 periods, and so
+did mean-reversion.
 
 **Key findings:**
 
@@ -60,16 +67,52 @@ Both strategies were tested on ~8 years of real Dow Jones data
   while mean-reversion is structurally the wrong tool for it.
 - Neither simple strategy beat buy-and-hold — a realistic, well-documented
   outcome. Beating the market is hard, and most simple rules don't.
-- Momentum matched the market's drawdown (-16.4%) while stepping aside
-  during downtrends, showing comparable risk with a different return
-  profile.
+- Mean-reversion lost money in 4 of 5 walk-forward periods, so its poor
+  result is not an accident of where the train/test cut falls.
+- Fixing a warm-up bug (see below) raised momentum's out-of-sample
+  return from +13.0% to +20.7%: the earlier version had been forced to
+  sit flat for the first 200 days of the test period.
 
 Documenting strategies that *don't* beat the benchmark, and explaining
 *why*, is the point: this is a research process, not a sales pitch.
 
+### Bugs found while reviewing the backtest
+
+Honest backtests need their own code reviewed. Issues fixed so far:
+
+- **Indicator warm-up in the test period.** Signals were recomputed on
+  the test slice alone, so a 200-day moving average had no value for the
+  first 200 test days. Signals are now computed on the full history
+  (still leak-free: rolling windows only look backwards) and then split.
+- **Non-standard Sharpe ratio.** It divided the geometric annual return
+  by volatility; it now uses the standard mean/std of daily (excess)
+  returns × √252.
+- **Silent synthetic data.** A failed (often rate-limited) download used
+  to swap in random data with one easily-missed line of output. It now
+  warns loudly, labels the chart, and can be turned off with
+  `--no-fallback`.
+- **Free first trade.** A period that started already invested was not
+  charged the entry cost.
+
+## Project structure
+
+```
+backtester/
+  data.py        price loading (yfinance + daily cache, synthetic fallback)
+  strategies.py  mean-reversion and momentum signal generators
+  engine.py      vectorized backtest, train/test split, walk-forward
+  metrics.py     return, volatility, Sharpe, max drawdown
+  plotting.py    equity-curve charts
+  cli.py         command-line options shared by both scripts
+tests/           pytest suite (incl. an automated look-ahead-bias test)
+mean_reversion_backtest.py
+momentum_backtest.py
+```
+
 ## Tech stack
 
-Python, pandas, NumPy, Matplotlib, yfinance.
+Python, pandas, NumPy, Matplotlib, yfinance; pytest and ruff for
+testing and linting, GitHub Actions for CI.
 
 ## How to run
 
@@ -79,14 +122,25 @@ python mean_reversion_backtest.py
 python momentum_backtest.py
 ```
 
-By default both scripts pull real daily data via `yfinance`. If the
-network or library is unavailable, they fall back to synthetic data so
-the code always runs.
+By default both scripts pull real daily data via `yfinance` and cache it
+in `.cache/` for the day. If the download fails, they fall back to
+synthetic data with a clear warning so the code always runs; pass
+`--no-fallback` to fail instead.
 
-To test other assets, change the ticker in `main()`:
+Every setting is a command-line option (`--help` lists them all):
 
-```python
-prices = load_prices("DIA", years=8)   # Dow ETF, S&P: "SPY", Nasdaq: "QQQ"
+```bash
+python momentum_backtest.py --ticker SPY --years 15 --fast 20 --slow 100
+python mean_reversion_backtest.py --ticker QQQ --entry-z 1.5 --cost-bps 5
+python momentum_backtest.py --walk-forward 5
+```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+ruff check .
 ```
 
 ## What I learned
@@ -105,7 +159,8 @@ prices = load_prices("DIA", years=8)   # Dow ETF, S&P: "SPY", Nasdaq: "QQQ"
 - [ ] Replace the hand-coded z-score rule with an ML classifier
       (feature engineering from price/volatility, proper CV).
 - [ ] Multi-asset testing to check robustness.
-- [ ] Walk-forward (rolling) validation instead of a single split.
+- [x] Walk-forward validation across several periods.
+- [ ] Parameter optimisation inside each walk-forward training window.
 
 ## Disclaimer
 
