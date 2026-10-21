@@ -39,3 +39,12 @@ def test_missing_config_file_is_an_error(tmp_path):
 def test_example_configs_are_valid(path):
     script = importlib.import_module(path.stem.split("_")[0] + "_backtest")
     assert parse_args(script.build_parser(), ["--config", str(path)])
+
+
+def test_optimize_without_grid_is_a_clean_error():
+    from backtester.cli import run
+    from backtester.strategies import momentum_signals
+
+    args = parse_args(_parser(), ["--walk-forward", "2", "--optimize"])
+    with pytest.raises(SystemExit, match="no parameter grid"):
+        run(args, momentum_signals, {}, label="X", grid=None)

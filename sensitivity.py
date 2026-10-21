@@ -12,6 +12,8 @@ How to run locally:
 """
 
 import argparse
+from collections.abc import Callable
+from typing import NamedTuple
 
 import matplotlib
 
@@ -26,13 +28,23 @@ from backtester.strategies import (  # noqa: E402
     momentum_signals,
 )
 
+
+class Grid(NamedTuple):
+    signal_fn: Callable
+    x_name: str
+    xs: list
+    y_name: str
+    ys: list
+    fixed: dict
+
+
 GRIDS = {
-    "momentum": (momentum_signals, "fast", [10, 20, 30, 50, 75, 100],
-                 "slow", [100, 150, 200, 250, 300], {}),
-    "mean_reversion": (mean_reversion_signals, "lookback", [5, 10, 20, 40, 60],
-                       "entry_z", [0.5, 1.0, 1.5, 2.0, 2.5], {"exit_z": 0.0}),
-    "breakout": (breakout_signals, "entry", [20, 40, 55, 100, 150],
-                 "exit", [5, 10, 20, 40], {}),
+    "momentum": Grid(momentum_signals, "fast", [10, 20, 30, 50, 75, 100],
+                     "slow", [100, 150, 200, 250, 300], {}),
+    "mean_reversion": Grid(mean_reversion_signals, "lookback", [5, 10, 20, 40, 60],
+                           "entry_z", [0.5, 1.0, 1.5, 2.0, 2.5], {"exit_z": 0.0}),
+    "breakout": Grid(breakout_signals, "entry", [20, 40, 55, 100, 150],
+                     "exit", [5, 10, 20, 40], {}),
 }
 
 
@@ -58,8 +70,8 @@ def main(argv=None):
 
     fig, ax = plt.subplots(figsize=(8, 6))
     im = ax.imshow(grid.to_numpy(dtype=float), cmap="RdYlGn", vmin=-1, vmax=1, origin="lower")
-    ax.set_xticks(range(len(xs)), labels=xs)
-    ax.set_yticks(range(len(ys)), labels=ys)
+    ax.set_xticks(range(len(xs)), labels=[str(x) for x in xs])
+    ax.set_yticks(range(len(ys)), labels=[str(y) for y in ys])
     ax.set_xlabel(x_name)
     ax.set_ylabel(y_name)
     for i, y in enumerate(ys):

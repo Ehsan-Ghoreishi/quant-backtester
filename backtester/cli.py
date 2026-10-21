@@ -92,6 +92,8 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
         raise SystemExit("--split must be between 0 and 1")
     if args.optimize and not args.walk_forward:
         raise SystemExit("--optimize requires --walk-forward N")
+    if args.optimize and not grid:
+        raise SystemExit(f"--optimize is not available for {label}: no parameter grid")
 
     prices = load_prices(args.ticker, years=args.years, fallback=not args.no_fallback)
     synthetic = prices.attrs.get("source") == "synthetic"
@@ -122,7 +124,7 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
                                           "Cost Drag": "{:.2%}".format}))
     if args.walk_forward:
         print_walk_forward(walk_forward(prices, position, args.walk_forward, args.cost_bps))
-    if args.optimize:
+    if args.optimize and grid:
         tuned = optimized_walk_forward(prices, signal_fn, grid, args.walk_forward, args.cost_bps)
         print(f"\n=== WALK-FORWARD WITH RE-TUNING ({len(grid)} parameter sets) ===")
         for chosen, bt in tuned:
