@@ -15,36 +15,12 @@ How to run locally:
     python momentum_backtest.py
 """
 
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 from backtester.data import load_prices
 from backtester.engine import backtest, train_test_split
 from backtester.metrics import metrics
-
-
-# ----------------------------------------------------------------------
-# 2. STRATEGY  (this is the only real difference vs mean-reversion)
-# ----------------------------------------------------------------------
-def generate_signals(prices: pd.Series, fast: int = 50, slow: int = 200) -> pd.Series:
-    """
-    Moving-average crossover momentum:
-      - LONG (+1) when fast MA is above slow MA  -> uptrend
-      - FLAT (0)  when fast MA is below slow MA   -> downtrend
-
-    We go flat (not short) in downtrends, which is a common, more
-    conservative momentum variant.
-
-    Signals are shifted by 1 day to avoid look-ahead bias.
-    """
-    fast_ma = prices.rolling(fast).mean()
-    slow_ma = prices.rolling(slow).mean()
-
-    position = (fast_ma > slow_ma).astype(float)   # 1 when uptrend, else 0
-    position[fast_ma.isna() | slow_ma.isna()] = 0  # no signal until both MAs exist
-
-    return position.shift(1).fillna(0)
+from backtester.strategies import momentum_signals as generate_signals
 
 
 # ----------------------------------------------------------------------
