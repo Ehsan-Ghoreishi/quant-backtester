@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.analysis import bootstrap_sharpe, sensitivity_grid
+from backtester.analysis import bootstrap_sharpe, cost_sweep, sensitivity_grid
 from backtester.engine import split_backtest
 from backtester.metrics import metrics
-from backtester.strategies import momentum_signals
+from backtester.strategies import mean_reversion_signals, momentum_signals
 
 
 def test_grid_shape_and_invalid_cells(prices):
@@ -58,3 +58,17 @@ def test_bootstrap_is_reproducible_and_needs_enough_data():
     assert bootstrap_sharpe(r, seed=1) == bootstrap_sharpe(r, seed=1)
     with pytest.raises(ValueError):
         bootstrap_sharpe(r.iloc[:30], block=20)
+
+
+def test_cost_sweep_drag_grows_with_costs(prices):
+    position = mean_reversion_signals(prices)
+    sweep = cost_sweep(prices, position, costs_bps=(0, 5, 20))
+    assert sweep.loc[0, "Cost Drag"] == 0.0
+    assert sweep["Annualized Return"].is_monotonic_decreasing
+    assert sweep.loc[20, "Cost Drag"] > sweep.loc[5, "Cost Drag"] > 0
+
+
+def test_cost_sweep_buy_and_hold_pays_entry_only(prices):
+    sweep = cost_sweep(prices, pd.Series(1.0, index=prices.index), costs_bps=(0, 10))
+    # one entry trade at the start of the test period, nothing else
+    assert sweep.loc[10, "Cost Drag"] < 0.001

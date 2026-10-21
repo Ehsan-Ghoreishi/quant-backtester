@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 import pandas as pd
 
-from backtester.analysis import bootstrap_sharpe
+from backtester.analysis import bootstrap_sharpe, cost_sweep
 from backtester.data import load_prices
 from backtester.engine import optimized_walk_forward, split_backtest, walk_forward
 from backtester.metrics import (
@@ -35,6 +35,8 @@ def base_parser(description: str, default_output: str) -> argparse.ArgumentParse
                    help="also report results for N consecutive out-of-sample periods")
     p.add_argument("--optimize", action="store_true",
                    help="with --walk-forward: re-tune parameters on each training window")
+    p.add_argument("--cost-sweep", action="store_true",
+                   help="also report test results at 0, 2, 5, 10 and 20 bps")
     p.add_argument("--vol-target", type=float, default=None, metavar="VOL",
                    help="scale positions to this annualized volatility, e.g. 0.10")
     p.add_argument("--max-leverage", type=float, default=1.0,
@@ -72,6 +74,12 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
     print_metrics(relative_metrics(bt_te["strat_ret"], bt_te["market_ret"]))
     print_bootstrap(bt_te)
 
+    if args.cost_sweep:
+        sweep = cost_sweep(prices, position, split=args.split)
+        print("\n=== COST SENSITIVITY (test) ===")
+        print(sweep.to_string(formatters={"Annualized Return": "{:.1%}".format,
+                                          "Sharpe": "{:.2f}".format,
+                                          "Cost Drag": "{:.2%}".format}))
     if args.walk_forward:
         print_walk_forward(walk_forward(prices, position, args.walk_forward, args.cost_bps))
     if args.optimize:

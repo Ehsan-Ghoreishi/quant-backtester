@@ -79,3 +79,24 @@ def bootstrap_sharpe(returns: pd.Series, bench: pd.Series | None = None,
     low, high = np.quantile(stats, [alpha, 1 - alpha])
     return {"low": float(low), "high": float(high),
             "p_le_zero": float((stats <= 0).mean())}
+
+
+def cost_sweep(prices: pd.Series, position: pd.Series,
+               costs_bps: Sequence[float] = (0, 2, 5, 10, 20),
+               split: float = 0.7) -> pd.DataFrame:
+    """
+    Out-of-sample results at several transaction-cost levels.
+
+    Real costs (commissions, spread, slippage) are uncertain, so a result
+    that only survives at the optimistic end of the range is fragile.
+    The last column is the annual return given up to costs vs zero cost.
+    """
+    rows = {}
+    for c in costs_bps:
+        _, bt_te = split_backtest(prices, position, split, c)
+        m = metrics(bt_te["strat_ret"])
+        rows[c] = {"Annualized Return": m["Annualized Return"], "Sharpe": m["Sharpe"]}
+    out = pd.DataFrame.from_dict(rows, orient="index")
+    out.index.name = "cost (bps)"
+    out["Cost Drag"] = out["Annualized Return"].iloc[0] - out["Annualized Return"]
+    return out
