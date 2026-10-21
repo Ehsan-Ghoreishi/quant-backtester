@@ -12,15 +12,20 @@ How to run locally:
     python breakout_backtest.py --help
 """
 
-from backtester.cli import base_parser, run
+from backtester.cli import base_parser, parse_args, run
 from backtester.strategies import breakout_signals
 
 
-def main(argv=None):
+def build_parser():
     p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve_breakout.png")
     p.add_argument("--entry", type=int, default=55, help="breakout window in days")
     p.add_argument("--exit", type=int, default=20, help="exit window in days")
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv=None):
+    p = build_parser()
+    args = parse_args(p, argv)
     if args.exit >= args.entry:
         p.error("--exit must be shorter than --entry")
 

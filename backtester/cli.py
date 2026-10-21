@@ -1,7 +1,14 @@
 """Command-line plumbing shared by the strategy scripts."""
 
 import argparse
+import sys
 from collections.abc import Callable
+from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover
+    import tomli as tomllib
 
 import pandas as pd
 
@@ -23,8 +30,11 @@ from backtester.sizing import vol_target
 def base_parser(description: str, default_output: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=description,
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument("--config", metavar="FILE",
+                   help="TOML file with default values for any option below; "
+                        "options given on the command line win")
     p.add_argument("--ticker", default="^DJI",
-                   help='Yahoo Finance symbol, e.g. "^DJI", "SPY", "QQQ" (default: ^DJI)')
+                   help='Yahoo Finance symbol, e.g. "^DJI", "SPY", "QQQ"')
     p.add_argument("--years", type=int, default=8, help="years of daily history")
     p.add_argument("--split", type=float, default=0.7,
                    help="fraction of history used as training period")
@@ -46,6 +56,33 @@ def base_parser(description: str, default_output: str) -> argparse.ArgumentParse
                    help="write a JSON summary and the daily test backtest (CSV) to DIR")
     p.add_argument("--output", default=default_output, help="path of the equity-curve chart")
     return p
+
+
+def parse_args(p: argparse.ArgumentParser, argv=None) -> argparse.Namespace:
+    """Parse arguments, taking defaults from --config when one is given."""
+    args = p.parse_args(argv)
+    if args.config:
+        p.set_defaults(**load_config(p, args.config))
+        args = p.parse_args(argv)
+    return args
+
+
+def load_config(p: argparse.ArgumentParser, path: str) -> dict:
+    """
+    Read a flat TOML file whose keys are option names, e.g.
+    `ticker = "SPY"` or `cost-bps = 5`. Unknown keys are an error, so a
+    typo cannot silently fall back to a default.
+    """
+    try:
+        raw = tomllib.loads(Path(path).read_text())
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        p.error(f"cannot read config {path}: {e}")
+    known = {a.dest for a in p._actions} - {"help", "config"}
+    config = {k.replace("-", "_"): v for k, v in raw.items()}
+    unknown = sorted(set(config) - known)
+    if unknown:
+        p.error(f"unknown option(s) in {path}: {', '.join(unknown)}")
+    return config
 
 
 def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],

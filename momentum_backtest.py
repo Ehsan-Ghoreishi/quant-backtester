@@ -15,17 +15,22 @@ How to run locally:
     python momentum_backtest.py --help
 """
 
-from backtester.cli import base_parser, run
+from backtester.cli import base_parser, parse_args, run
 from backtester.strategies import momentum_signals
 
 
-def main(argv=None):
+def build_parser():
     p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve_momentum.png")
     p.add_argument("--fast", type=int, default=50, help="fast moving average in days")
     p.add_argument("--slow", type=int, default=200, help="slow moving average in days")
     p.add_argument("--allow-short", action="store_true",
                    help="go short in downtrends instead of flat")
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv=None):
+    p = build_parser()
+    args = parse_args(p, argv)
     if args.fast >= args.slow:
         p.error("--fast must be shorter than --slow")
 

@@ -1,0 +1,11 @@
+# Momentum on the S&P 500 with volatility targeting and a full report.
+# Run: python momentum_backtest.py --config configs/momentum_spy.toml
+ticker = "SPY"
+years = 15
+fast = 50
+slow = 200
+cost-bps = 3
+vol-target = 0.12
+walk-forward = 5
+cost-sweep = true
+output = "equity_curve_momentum_spy.png"
