@@ -59,6 +59,8 @@ def momentum_signals(prices: pd.Series, fast: int = 50, slow: int = 200,
     more conservative momentum variant: equity indices drift upwards over
     time, so shorting them fights that drift.
     """
+    if fast >= slow:
+        raise ValueError("fast window must be shorter than slow window")
     fast_ma = prices.rolling(fast).mean()
     slow_ma = prices.rolling(slow).mean()
 
@@ -81,6 +83,8 @@ def breakout_signals(prices: pd.Series, entry: int = 55, exit: int = 20) -> pd.S
     Unlike the moving-average crossover, this reacts to price making new
     highs/lows rather than to averages, so it enters and exits faster.
     """
+    if exit >= entry:
+        raise ValueError("exit window must be shorter than entry window")
     # channels use the PREVIOUS n closes, so today's close can break them
     upper = prices.rolling(entry).max().shift(1).to_numpy()
     lower = prices.rolling(exit).min().shift(1).to_numpy()
