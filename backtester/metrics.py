@@ -16,7 +16,7 @@ def metrics(returns: pd.Series, freq: int = 252, risk_free: float = 0.0) -> dict
     """
     r = returns.dropna()
     if len(r) == 0:
-        return {k: 0.0 for k in (*PERCENT_KEYS, "Sharpe")}
+        return {k: 0.0 for k in (*PERCENT_KEYS, "Sharpe", "Sortino", "Calmar")}
 
     total = (1 + r).prod() - 1
     ann_ret = (1 + total) ** (freq / len(r)) - 1
@@ -27,14 +27,23 @@ def metrics(returns: pd.Series, freq: int = 252, risk_free: float = 0.0) -> dict
     # treat float noise around zero volatility as zero (Sharpe undefined)
     sharpe = excess.mean() / std * np.sqrt(freq) if std > 1e-12 else 0.0
 
+    # Sortino: like Sharpe, but only downside deviation counts as risk
+    downside = np.sqrt((np.minimum(excess, 0) ** 2).mean())
+    sortino = excess.mean() / downside * np.sqrt(freq) if downside > 1e-12 else 0.0
+
     equity = (1 + r).cumprod()
     drawdown = equity / equity.cummax() - 1
+    max_dd = float(min(drawdown.min(), 0.0))
+    # Calmar: annual return per unit of worst drawdown
+    calmar = ann_ret / abs(max_dd) if max_dd < -1e-12 else 0.0
     return {
         "Total Return": float(total),
         "Annualized Return": float(ann_ret),
         "Annualized Vol": float(ann_vol),
         "Sharpe": float(sharpe),
-        "Max Drawdown": float(min(drawdown.min(), 0.0)),
+        "Sortino": float(sortino),
+        "Calmar": float(calmar),
+        "Max Drawdown": max_dd,
     }
 
 

@@ -39,3 +39,26 @@ def test_empty_returns_do_not_crash():
 def test_format_metrics():
     out = format_metrics({"Total Return": 0.1234, "Sharpe": 1.234})
     assert out == {"Total Return": "12.3%", "Sharpe": "1.23"}
+
+
+def test_sortino_ignores_upside_volatility():
+    # same downside, much larger upside swings -> Sharpe drops, Sortino rises
+    calm = pd.Series([0.01, -0.005] * 200)
+    spiky = pd.Series([0.03, -0.005] * 200)
+    assert metrics(spiky)["Sortino"] > metrics(calm)["Sortino"]
+
+
+def test_sortino_matches_definition():
+    r = pd.Series(np.random.default_rng(2).normal(0.0005, 0.01, 1000))
+    downside = np.sqrt((np.minimum(r, 0) ** 2).mean())
+    assert metrics(r)["Sortino"] == pytest.approx(r.mean() / downside * np.sqrt(252))
+
+
+def test_calmar_is_return_over_max_drawdown():
+    r = pd.Series(np.random.default_rng(3).normal(0.0005, 0.01, 1000))
+    m = metrics(r)
+    assert m["Calmar"] == pytest.approx(m["Annualized Return"] / abs(m["Max Drawdown"]))
+
+
+def test_calmar_zero_without_drawdown():
+    assert metrics(pd.Series([0.001] * 50))["Calmar"] == 0.0
