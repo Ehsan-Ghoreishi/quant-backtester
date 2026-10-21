@@ -68,3 +68,32 @@ def momentum_signals(prices: pd.Series, fast: int = 50, slow: int = 200,
     position[fast_ma.isna() | slow_ma.isna()] = 0  # no signal until both MAs exist
 
     return position.shift(1).fillna(0)
+
+
+def breakout_signals(prices: pd.Series, entry: int = 55, exit: int = 20) -> pd.Series:
+    """
+    Donchian channel breakout (the classic "Turtle" trend rule):
+      - go LONG when the close is above the highest close of the
+        previous `entry` days (a new breakout high)
+      - go FLAT when the close is below the lowest close of the
+        previous `exit` days
+
+    Unlike the moving-average crossover, this reacts to price making new
+    highs/lows rather than to averages, so it enters and exits faster.
+    """
+    # channels use the PREVIOUS n closes, so today's close can break them
+    upper = prices.rolling(entry).max().shift(1).to_numpy()
+    lower = prices.rolling(exit).min().shift(1).to_numpy()
+    close = prices.to_numpy()
+
+    position = np.zeros(len(prices))
+    pos = 0.0
+    for t in range(len(prices)):
+        if pos == 0 and close[t] > upper[t]:
+            pos = 1.0
+        elif pos == 1 and close[t] < lower[t]:
+            pos = 0.0
+        position[t] = pos
+
+    # shift: decision made on day t is acted on day t+1
+    return pd.Series(position, index=prices.index).shift(1).fillna(0)

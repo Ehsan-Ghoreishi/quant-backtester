@@ -14,11 +14,12 @@ import argparse
 from backtester.data import load_prices
 from backtester.engine import split_backtest
 from backtester.metrics import metrics
-from backtester.strategies import mean_reversion_signals, momentum_signals
+from backtester.strategies import breakout_signals, mean_reversion_signals, momentum_signals
 
 STRATEGIES = {
     "Mean-Reversion": (mean_reversion_signals, dict(lookback=20, entry_z=1.0, exit_z=0.0)),
     "Momentum": (momentum_signals, dict(fast=50, slow=200)),
+    "Breakout": (breakout_signals, dict(entry=55, exit=20)),
 }
 
 

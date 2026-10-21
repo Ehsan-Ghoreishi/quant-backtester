@@ -2,12 +2,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.strategies import mean_reversion_signals, momentum_signals
+from backtester.strategies import breakout_signals, mean_reversion_signals, momentum_signals
 
 STRATEGIES = [
     (mean_reversion_signals, dict(lookback=20, entry_z=1.0, exit_z=0.0)),
     (momentum_signals, dict(fast=10, slow=50)),
     (momentum_signals, dict(fast=10, slow=50, allow_short=True)),
+    (breakout_signals, dict(entry=20, exit=10)),
 ]
 
 
@@ -57,3 +58,13 @@ def test_momentum_short_in_downtrend_only_when_allowed():
     prices = pd.Series(np.linspace(200, 100, 300), index=pd.bdate_range("2024-01-01", periods=300))
     assert (momentum_signals(prices, fast=10, slow=50).iloc[51:] == 0).all()
     assert (momentum_signals(prices, fast=10, slow=50, allow_short=True).iloc[51:] == -1).all()
+
+
+def test_breakout_enters_on_new_high_and_exits_on_new_low():
+    path = [100.0] * 25 + [105.0] * 5 + [95.0] * 3
+    prices = pd.Series(path, index=pd.bdate_range("2024-01-01", periods=len(path)))
+    pos = breakout_signals(prices, entry=20, exit=10)
+    assert (pos.iloc[:26] == 0).all()   # breakout on bar 25 is acted on bar 26
+    assert pos.iloc[26] == 1
+    assert pos.iloc[30] == 1            # drop happens on bar 30 ...
+    assert pos.iloc[31] == 0            # ... and the exit is acted on bar 31
