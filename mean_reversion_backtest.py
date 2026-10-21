@@ -10,47 +10,23 @@ Author: Ehsan Ghoreishi
 Goal: First step into systematic / quant trading + ML portfolio piece.
 
 How to run locally:
-    pip install yfinance pandas numpy matplotlib
-    python mean_reversion_backtest.py
+    pip install -r requirements.txt
+    python mean_reversion_backtest.py --help
 """
 
-import matplotlib.pyplot as plt
-
-from backtester.data import load_prices
-from backtester.engine import split_backtest
-from backtester.metrics import metrics, print_metrics
-from backtester.strategies import mean_reversion_signals as generate_signals
+from backtester.cli import base_parser, run
+from backtester.strategies import mean_reversion_signals
 
 
-# ----------------------------------------------------------------------
-# MAIN
-# ----------------------------------------------------------------------
-def main():
-    prices = load_prices("^DJI", years=8)
+def main(argv=None):
+    p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve.png")
+    p.add_argument("--lookback", type=int, default=20, help="rolling window in days (default: 20)")
+    p.add_argument("--entry-z", type=float, default=1.0, help="z-score to open a trade (default: 1.0)")
+    p.add_argument("--exit-z", type=float, default=0.0, help="z-score to close a trade (default: 0.0)")
+    args = p.parse_args(argv)
 
-    params = dict(lookback=20, entry_z=1.0, exit_z=0.0)
-    bt_tr, bt_te = split_backtest(prices, generate_signals(prices, **params), split=0.7)
-
-    print("\n=== IN-SAMPLE (train) ===")
-    print_metrics(metrics(bt_tr["strat_ret"]))
-
-    print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
-    print_metrics(metrics(bt_te["strat_ret"]))
-    print("\n  Buy & Hold (test) for comparison:")
-    print_metrics(metrics(bt_te["market_ret"]))
-
-    # Plot out-of-sample equity curves
-    plt.figure(figsize=(11, 6))
-    plt.plot(bt_te.index, bt_te["strat_equity"], label="Mean-Reversion Strategy")
-    plt.plot(bt_te.index, bt_te["market_equity"], label="Buy & Hold", alpha=0.7)
-    plt.title("Out-of-Sample Equity Curve")
-    plt.xlabel("Date")
-    plt.ylabel("Growth of $1")
-    plt.legend()
-    plt.grid(alpha=0.3)
-    plt.tight_layout()
-    plt.savefig("equity_curve.png", dpi=120)
-    print("\nSaved chart -> equity_curve.png")
+    params = dict(lookback=args.lookback, entry_z=args.entry_z, exit_z=args.exit_z)
+    run(args, mean_reversion_signals, params, label="Mean-Reversion")
 
 
 if __name__ == "__main__":

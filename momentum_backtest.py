@@ -11,42 +11,23 @@ mean-reversion project, so the two are directly comparable.
 Author: Ehsan Ghoreishi
 
 How to run locally:
-    pip install yfinance pandas numpy matplotlib
-    python momentum_backtest.py
+    pip install -r requirements.txt
+    python momentum_backtest.py --help
 """
 
-import matplotlib.pyplot as plt
-
-from backtester.data import load_prices
-from backtester.engine import split_backtest
-from backtester.metrics import metrics, print_metrics
-from backtester.strategies import momentum_signals as generate_signals
+from backtester.cli import base_parser, run
+from backtester.strategies import momentum_signals
 
 
-# ----------------------------------------------------------------------
-# MAIN
-# ----------------------------------------------------------------------
-def main():
-    prices = load_prices("^DJI", years=8)
-    params = dict(fast=50, slow=200)
-    bt_tr, bt_te = split_backtest(prices, generate_signals(prices, **params), split=0.7)
+def main(argv=None):
+    p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve_momentum.png")
+    p.add_argument("--fast", type=int, default=50, help="fast moving average in days (default: 50)")
+    p.add_argument("--slow", type=int, default=200, help="slow moving average in days (default: 200)")
+    args = p.parse_args(argv)
+    if args.fast >= args.slow:
+        p.error("--fast must be shorter than --slow")
 
-    print("\n=== IN-SAMPLE (train) ===")
-    print_metrics(metrics(bt_tr["strat_ret"]))
-
-    print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
-    print_metrics(metrics(bt_te["strat_ret"]))
-    print("\n  Buy & Hold (test) for comparison:")
-    print_metrics(metrics(bt_te["market_ret"]))
-
-    plt.figure(figsize=(11, 6))
-    plt.plot(bt_te.index, bt_te["strat_equity"], label="Momentum Strategy")
-    plt.plot(bt_te.index, bt_te["market_equity"], label="Buy & Hold", alpha=0.7)
-    plt.title("Out-of-Sample Equity Curve — Momentum")
-    plt.xlabel("Date"); plt.ylabel("Growth of $1")
-    plt.legend(); plt.grid(alpha=0.3); plt.tight_layout()
-    plt.savefig("equity_curve_momentum.png", dpi=120)
-    print("\nSaved chart -> equity_curve_momentum.png")
+    run(args, momentum_signals, dict(fast=args.fast, slow=args.slow), label="Momentum")
 
 
 if __name__ == "__main__":
