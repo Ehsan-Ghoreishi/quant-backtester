@@ -7,7 +7,7 @@ import pandas as pd
 
 from backtester.data import load_prices
 from backtester.engine import optimized_walk_forward, split_backtest, walk_forward
-from backtester.metrics import metrics, print_metrics
+from backtester.metrics import metrics, print_metrics, print_trade_stats, trade_stats
 from backtester.plotting import plot_equity
 
 
@@ -50,6 +50,7 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
 
     print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
     print_metrics(metrics(bt_te["strat_ret"]))
+    print_trade_stats(trade_stats(bt_te))
     print("\n  Buy & Hold (test) for comparison:")
     print_metrics(metrics(bt_te["market_ret"]))
 

@@ -55,3 +55,39 @@ def format_metrics(stats: dict) -> dict:
 def print_metrics(stats: dict, indent: str = "  ") -> None:
     for k, v in format_metrics(stats).items():
         print(f"{indent}{k:<20} {v}")
+
+
+def trade_stats(bt: pd.DataFrame, freq: int = 252) -> dict:
+    """
+    Per-trade statistics for a backtest from `engine.backtest()`.
+
+    A trade is a run of consecutive bars holding the same non-zero
+    position; its return is the compounded strategy return (after costs)
+    over that run. A trade still open at the end is counted as closed.
+    """
+    pos = bt["position"]
+    in_market = pos != 0
+    # a new trade starts whenever the position changes to a non-zero value
+    trade_id = (pos != pos.shift()).cumsum()[in_market]
+    trade_returns = (1 + bt.loc[in_market, "strat_ret"]).groupby(trade_id).prod() - 1
+
+    n = len(trade_returns)
+    years = len(bt) / freq
+    return {
+        "Trades": n,
+        "Trades per Year": n / years if years else 0.0,
+        "Win Rate": float((trade_returns > 0).mean()) if n else 0.0,
+        "Avg Trade": float(trade_returns.mean()) if n else 0.0,
+        "Time in Market": float(in_market.mean()) if len(bt) else 0.0,
+    }
+
+
+def print_trade_stats(stats: dict, indent: str = "  ") -> None:
+    for k, v in stats.items():
+        if k == "Trades":
+            text = f"{v}"
+        elif k == "Trades per Year":
+            text = f"{v:.1f}"
+        else:
+            text = f"{v:.1%}"
+        print(f"{indent}{k:<20} {text}")

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.metrics import format_metrics, metrics
+from backtester.metrics import format_metrics, metrics, trade_stats
 
 
 def test_constant_returns():
@@ -62,3 +62,27 @@ def test_calmar_is_return_over_max_drawdown():
 
 def test_calmar_zero_without_drawdown():
     assert metrics(pd.Series([0.001] * 50))["Calmar"] == 0.0
+
+
+def _bt(position, strat_ret):
+    idx = pd.bdate_range("2024-01-01", periods=len(position))
+    return pd.DataFrame({"position": position, "strat_ret": strat_ret}, index=idx, dtype=float)
+
+
+def test_trade_stats_counts_runs_and_flips():
+    # long 2 bars, flat, short 2 bars, flip straight to long 1 bar -> 3 trades
+    bt = _bt([1, 1, 0, -1, -1, 1], [0.01, 0.01, 0, -0.02, 0.01, 0.03])
+    s = trade_stats(bt)
+    assert s["Trades"] == 3
+    assert s["Win Rate"] == pytest.approx(2 / 3)
+    assert s["Time in Market"] == pytest.approx(5 / 6)
+
+
+def test_trade_return_is_compounded():
+    s = trade_stats(_bt([1, 1], [0.10, 0.10]))
+    assert s["Avg Trade"] == pytest.approx(0.21)
+
+
+def test_trade_stats_without_trades():
+    s = trade_stats(_bt([0, 0, 0], [0, 0, 0]))
+    assert s["Trades"] == 0 and s["Win Rate"] == 0.0 and s["Time in Market"] == 0.0
