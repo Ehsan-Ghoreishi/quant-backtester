@@ -13,7 +13,8 @@ import numpy as np
 import pandas as pd
 
 MIN_BARS = 100
-CACHE_DIR = Path(".cache")
+# anchored to the project root so the cache is shared no matter where a script runs from
+CACHE_DIR = Path(__file__).resolve().parent.parent / ".cache"
 
 
 def load_prices(ticker: str = "^DJI", years: int = 8,

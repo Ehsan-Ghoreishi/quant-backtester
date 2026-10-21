@@ -1,21 +1,40 @@
 """Command-line plumbing shared by the strategy scripts."""
 
 import argparse
+import sys
 from collections.abc import Callable
+from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover
+    import tomli as tomllib
 
 import pandas as pd
 
+from backtester.analysis import bootstrap_sharpe, cost_sweep
 from backtester.data import load_prices
 from backtester.engine import optimized_walk_forward, split_backtest, walk_forward
-from backtester.metrics import metrics, print_metrics
+from backtester.metrics import (
+    metrics,
+    print_metrics,
+    print_trade_stats,
+    relative_metrics,
+    trade_stats,
+)
 from backtester.plotting import plot_equity
+from backtester.results import save_results
+from backtester.sizing import vol_target
 
 
 def base_parser(description: str, default_output: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=description,
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument("--config", metavar="FILE",
+                   help="TOML file with default values for any option below; "
+                        "options given on the command line win")
     p.add_argument("--ticker", default="^DJI",
-                   help='Yahoo Finance symbol, e.g. "^DJI", "SPY", "QQQ" (default: ^DJI)')
+                   help='Yahoo Finance symbol, e.g. "^DJI", "SPY", "QQQ"')
     p.add_argument("--years", type=int, default=8, help="years of daily history")
     p.add_argument("--split", type=float, default=0.7,
                    help="fraction of history used as training period")
@@ -27,8 +46,43 @@ def base_parser(description: str, default_output: str) -> argparse.ArgumentParse
                    help="also report results for N consecutive out-of-sample periods")
     p.add_argument("--optimize", action="store_true",
                    help="with --walk-forward: re-tune parameters on each training window")
+    p.add_argument("--cost-sweep", action="store_true",
+                   help="also report test results at 0, 2, 5, 10 and 20 bps")
+    p.add_argument("--vol-target", type=float, default=None, metavar="VOL",
+                   help="scale positions to this annualized volatility, e.g. 0.10")
+    p.add_argument("--max-leverage", type=float, default=1.0,
+                   help="cap on exposure when --vol-target is used")
+    p.add_argument("--save-results", metavar="DIR", default=None,
+                   help="write a JSON summary and the daily test backtest (CSV) to DIR")
     p.add_argument("--output", default=default_output, help="path of the equity-curve chart")
     return p
+
+
+def parse_args(p: argparse.ArgumentParser, argv=None) -> argparse.Namespace:
+    """Parse arguments, taking defaults from --config when one is given."""
+    args = p.parse_args(argv)
+    if args.config:
+        p.set_defaults(**load_config(p, args.config))
+        args = p.parse_args(argv)
+    return args
+
+
+def load_config(p: argparse.ArgumentParser, path: str) -> dict:
+    """
+    Read a flat TOML file whose keys are option names, e.g.
+    `ticker = "SPY"` or `cost-bps = 5`. Unknown keys are an error, so a
+    typo cannot silently fall back to a default.
+    """
+    try:
+        raw = tomllib.loads(Path(path).read_text())
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        p.error(f"cannot read config {path}: {e}")
+    known = {a.dest for a in p._actions} - {"help", "config"}
+    config = {k.replace("-", "_"): v for k, v in raw.items()}
+    unknown = sorted(set(config) - known)
+    if unknown:
+        p.error(f"unknown option(s) in {path}: {', '.join(unknown)}")
+    return config
 
 
 def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
@@ -38,33 +92,65 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
         raise SystemExit("--split must be between 0 and 1")
     if args.optimize and not args.walk_forward:
         raise SystemExit("--optimize requires --walk-forward N")
+    if args.optimize and not grid:
+        raise SystemExit(f"--optimize is not available for {label}: no parameter grid")
 
     prices = load_prices(args.ticker, years=args.years, fallback=not args.no_fallback)
     synthetic = prices.attrs.get("source") == "synthetic"
     position = signal_fn(prices, **params)
+    if args.vol_target:
+        position = vol_target(position, prices, args.vol_target, max_leverage=args.max_leverage)
     bt_tr, bt_te = split_backtest(prices, position, split=args.split, cost_bps=args.cost_bps)
 
-    print(f"\nParameters: {params}, cost {args.cost_bps} bps")
+    sizing = f", vol target {args.vol_target:.0%}" if args.vol_target else ""
+    print(f"\nParameters: {params}, cost {args.cost_bps} bps{sizing}")
     print("\n=== IN-SAMPLE (train) ===")
     print_metrics(metrics(bt_tr["strat_ret"]))
 
     print("\n=== OUT-OF-SAMPLE (test) — the honest number ===")
     print_metrics(metrics(bt_te["strat_ret"]))
+    print_trade_stats(trade_stats(bt_te))
     print("\n  Buy & Hold (test) for comparison:")
     print_metrics(metrics(bt_te["market_ret"]))
+    print("\n  Strategy vs Buy & Hold (test):")
+    print_metrics(relative_metrics(bt_te["strat_ret"], bt_te["market_ret"]))
+    print_bootstrap(bt_te)
 
+    if args.cost_sweep:
+        sweep = cost_sweep(prices, position, split=args.split)
+        print("\n=== COST SENSITIVITY (test) ===")
+        print(sweep.to_string(formatters={"Annualized Return": "{:.1%}".format,
+                                          "Sharpe": "{:.2f}".format,
+                                          "Cost Drag": "{:.2%}".format}))
     if args.walk_forward:
         print_walk_forward(walk_forward(prices, position, args.walk_forward, args.cost_bps))
-    if args.optimize:
+    if args.optimize and grid:
         tuned = optimized_walk_forward(prices, signal_fn, grid, args.walk_forward, args.cost_bps)
         print(f"\n=== WALK-FORWARD WITH RE-TUNING ({len(grid)} parameter sets) ===")
         for chosen, bt in tuned:
             print(f"  {bt.index[0]:%Y-%m-%d}: chose {chosen}")
         print_walk_forward([bt for _, bt in tuned], title="RE-TUNED WALK-FORWARD")
 
+    if args.save_results:
+        settings = {"ticker": args.ticker, "synthetic_data": synthetic, "years": args.years,
+                    "split": args.split, "cost_bps": args.cost_bps,
+                    "vol_target": args.vol_target, "params": params}
+        for path in save_results(args.save_results, label, settings, bt_tr, bt_te):
+            print(f"Saved results -> {path}")
+
     source = "SYNTHETIC data" if synthetic else args.ticker
     plot_equity(bt_te, label, f"Out-of-Sample Equity Curve — {label} ({source})", args.output)
     print(f"\nSaved chart -> {args.output}")
+
+
+def print_bootstrap(bt: pd.DataFrame) -> None:
+    """95% block-bootstrap intervals: is the test result distinguishable from luck?"""
+    own = bootstrap_sharpe(bt["strat_ret"])
+    diff = bootstrap_sharpe(bt["strat_ret"], bench=bt["market_ret"])
+    print("\n  Bootstrap 95% intervals (test, 20-day blocks):")
+    print(f"  {'Sharpe':<20} [{own['low']:.2f}, {own['high']:.2f}]")
+    print(f"  {'Sharpe - Buy&Hold':<20} [{diff['low']:.2f}, {diff['high']:.2f}]  "
+          f"P(strategy <= buy & hold) = {diff['p_le_zero']:.0%}")
 
 
 def print_walk_forward(folds: list[pd.DataFrame], title: str = "WALK-FORWARD") -> None:

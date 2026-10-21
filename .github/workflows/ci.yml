@@ -19,6 +19,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
-      - run: pytest -q
+      - run: mypy
+      - run: pytest -q --cov --cov-report=term-missing
       # end-to-end smoke test; offline-safe because it falls back to synthetic data
       - run: python momentum_backtest.py --ticker INVALID_TICKER --output /tmp/momentum.png

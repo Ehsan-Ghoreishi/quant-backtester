@@ -10,15 +10,19 @@ How to run locally:
 """
 
 import argparse
+from collections.abc import Callable
+
+import pandas as pd
 
 from backtester.data import load_prices
 from backtester.engine import split_backtest
 from backtester.metrics import metrics
-from backtester.strategies import mean_reversion_signals, momentum_signals
+from backtester.strategies import breakout_signals, mean_reversion_signals, momentum_signals
 
-STRATEGIES = {
+STRATEGIES: dict[str, tuple[Callable[..., pd.Series], dict]] = {
     "Mean-Reversion": (mean_reversion_signals, dict(lookback=20, entry_z=1.0, exit_z=0.0)),
     "Momentum": (momentum_signals, dict(fast=50, slow=200)),
+    "Breakout": (breakout_signals, dict(entry=55, exit=20)),
 }
 
 
@@ -31,7 +35,7 @@ def main(argv=None):
     p.add_argument("--cost-bps", type=float, default=2.0)
     args = p.parse_args(argv)
 
-    rows = []
+    rows: dict[str, dict[str, float]] = {}
     for ticker in args.tickers:
         try:
             # never mix synthetic data into a cross-asset comparison
@@ -39,25 +43,25 @@ def main(argv=None):
         except Exception as e:
             print(f"  skipping {ticker}: {e}")
             continue
-        row = {"Ticker": ticker}
-        bt_te = None
+        row: dict[str, float] = {}
         for name, (signal_fn, params) in STRATEGIES.items():
             _, bt_te = split_backtest(prices, signal_fn(prices, **params),
                                       split=args.split, cost_bps=args.cost_bps)
             row[name] = metrics(bt_te["strat_ret"])["Sharpe"]
+        # buy & hold is the same whichever strategy produced bt_te
         row["Buy & Hold"] = metrics(bt_te["market_ret"])["Sharpe"]
-        rows.append(row)
+        rows[ticker] = row
 
     if not rows:
         raise SystemExit("no data could be loaded")
 
-    cols = ["Ticker", *STRATEGIES, "Buy & Hold"]
+    cols = [*STRATEGIES, "Buy & Hold"]
     print("\n=== OUT-OF-SAMPLE SHARPE RATIO BY ASSET ===")
-    print("  " + "".join(f"{c:>16}" for c in cols))
-    for row in rows:
-        print("  " + f"{row['Ticker']:>16}" + "".join(f"{row[c]:>16.2f}" for c in cols[1:]))
+    print("  " + "".join(f"{c:>16}" for c in ["Ticker", *cols]))
+    for ticker, row in rows.items():
+        print("  " + f"{ticker:>16}" + "".join(f"{row[c]:>16.2f}" for c in cols))
     for name in STRATEGIES:
-        wins = sum(r[name] > r["Buy & Hold"] for r in rows)
+        wins = sum(r[name] > r["Buy & Hold"] for r in rows.values())
         print(f"  {name} beat buy & hold on {wins}/{len(rows)} assets")
 
 

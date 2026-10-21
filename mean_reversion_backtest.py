@@ -14,16 +14,21 @@ How to run locally:
     python mean_reversion_backtest.py --help
 """
 
-from backtester.cli import base_parser, run
+from backtester.cli import base_parser, parse_args, run
 from backtester.strategies import mean_reversion_signals
 
 
-def main(argv=None):
+def build_parser():
     p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve.png")
     p.add_argument("--lookback", type=int, default=20, help="rolling window in days")
     p.add_argument("--entry-z", type=float, default=1.0, help="z-score to open a trade")
     p.add_argument("--exit-z", type=float, default=0.0, help="z-score to close a trade")
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv=None):
+    p = build_parser()
+    args = parse_args(p, argv)
 
     params = dict(lookback=args.lookback, entry_z=args.entry_z, exit_z=args.exit_z)
     grid = [dict(lookback=lb, entry_z=z, exit_z=0.0)

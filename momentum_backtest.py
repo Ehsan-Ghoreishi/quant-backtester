@@ -15,20 +15,30 @@ How to run locally:
     python momentum_backtest.py --help
 """
 
-from backtester.cli import base_parser, run
+from backtester.cli import base_parser, parse_args, run
 from backtester.strategies import momentum_signals
 
 
-def main(argv=None):
+def build_parser():
     p = base_parser(__doc__.strip().splitlines()[0], default_output="equity_curve_momentum.png")
     p.add_argument("--fast", type=int, default=50, help="fast moving average in days")
     p.add_argument("--slow", type=int, default=200, help="slow moving average in days")
-    args = p.parse_args(argv)
+    p.add_argument("--allow-short", action="store_true",
+                   help="go short in downtrends instead of flat")
+    return p
+
+
+def main(argv=None):
+    p = build_parser()
+    args = parse_args(p, argv)
     if args.fast >= args.slow:
         p.error("--fast must be shorter than --slow")
 
-    grid = [dict(fast=f, slow=s) for f in (10, 20, 50) for s in (100, 150, 200)]
-    run(args, momentum_signals, dict(fast=args.fast, slow=args.slow), label="Momentum", grid=grid)
+    short = args.allow_short
+    grid = [dict(fast=f, slow=s, allow_short=short) for f in (10, 20, 50) for s in (100, 150, 200)]
+    params = dict(fast=args.fast, slow=args.slow, allow_short=short)
+    run(args, momentum_signals, params, label="Momentum (long/short)" if short else "Momentum",
+        grid=grid)
 
 
 if __name__ == "__main__":
