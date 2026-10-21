@@ -20,6 +20,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from backtester.data import load_prices
+from backtester.engine import backtest, train_test_split
 
 
 # ----------------------------------------------------------------------
@@ -46,27 +47,6 @@ def generate_signals(prices: pd.Series, fast: int = 50, slow: int = 200) -> pd.S
 
 
 # ----------------------------------------------------------------------
-# 3. BACKTEST  (shared engine)
-# ----------------------------------------------------------------------
-def backtest(prices: pd.Series, position: pd.Series, cost_bps: float = 2.0) -> pd.DataFrame:
-    ret = prices.pct_change().fillna(0)
-    strat_ret = position * ret
-    trades = position.diff().abs().fillna(0)
-    cost = trades * (cost_bps / 10000.0)
-    strat_ret_net = strat_ret - cost
-
-    out = pd.DataFrame({
-        "price": prices,
-        "position": position,
-        "market_ret": ret,
-        "strat_ret": strat_ret_net,
-    })
-    out["strat_equity"] = (1 + out["strat_ret"]).cumprod()
-    out["market_equity"] = (1 + out["market_ret"]).cumprod()
-    return out
-
-
-# ----------------------------------------------------------------------
 # 4. METRICS  (shared)
 # ----------------------------------------------------------------------
 def metrics(returns: pd.Series, freq: int = 252) -> dict:
@@ -85,11 +65,6 @@ def metrics(returns: pd.Series, freq: int = 252) -> dict:
         "Sharpe": f"{sharpe:.2f}",
         "Max Drawdown": f"{max_dd:.1%}",
     }
-
-
-def train_test_split(prices: pd.Series, split: float = 0.7):
-    cut = int(len(prices) * split)
-    return prices.iloc[:cut], prices.iloc[cut:]
 
 
 # ----------------------------------------------------------------------
