@@ -47,19 +47,24 @@ def mean_reversion_signals(prices: pd.Series, lookback: int = 20,
     return position.shift(1).fillna(0)
 
 
-def momentum_signals(prices: pd.Series, fast: int = 50, slow: int = 200) -> pd.Series:
+def momentum_signals(prices: pd.Series, fast: int = 50, slow: int = 200,
+                     allow_short: bool = False) -> pd.Series:
     """
     Moving-average crossover momentum:
       - LONG (+1) when fast MA is above slow MA  -> uptrend
       - FLAT (0)  when fast MA is below slow MA   -> downtrend
+        (or SHORT (-1) with allow_short=True)
 
-    We go flat (not short) in downtrends, which is a common, more
-    conservative momentum variant.
+    By default we go flat (not short) in downtrends, which is a common,
+    more conservative momentum variant: equity indices drift upwards over
+    time, so shorting them fights that drift.
     """
     fast_ma = prices.rolling(fast).mean()
     slow_ma = prices.rolling(slow).mean()
 
     position = (fast_ma > slow_ma).astype(float)   # 1 when uptrend, else 0
+    if allow_short:
+        position[fast_ma < slow_ma] = -1.0
     position[fast_ma.isna() | slow_ma.isna()] = 0  # no signal until both MAs exist
 
     return position.shift(1).fillna(0)

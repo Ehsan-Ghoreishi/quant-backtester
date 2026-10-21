@@ -7,6 +7,7 @@ from backtester.strategies import mean_reversion_signals, momentum_signals
 STRATEGIES = [
     (mean_reversion_signals, dict(lookback=20, entry_z=1.0, exit_z=0.0)),
     (momentum_signals, dict(fast=10, slow=50)),
+    (momentum_signals, dict(fast=10, slow=50, allow_short=True)),
 ]
 
 
@@ -50,3 +51,9 @@ def test_momentum_long_in_uptrend():
     prices = pd.Series(np.linspace(100, 200, 300), index=pd.bdate_range("2024-01-01", periods=300))
     pos = momentum_signals(prices, fast=10, slow=50)
     assert (pos.iloc[51:] == 1).all()
+
+
+def test_momentum_short_in_downtrend_only_when_allowed():
+    prices = pd.Series(np.linspace(200, 100, 300), index=pd.bdate_range("2024-01-01", periods=300))
+    assert (momentum_signals(prices, fast=10, slow=50).iloc[51:] == 0).all()
+    assert (momentum_signals(prices, fast=10, slow=50, allow_short=True).iloc[51:] == -1).all()
