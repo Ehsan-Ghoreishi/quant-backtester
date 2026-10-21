@@ -48,3 +48,30 @@ def test_optimize_without_grid_is_a_clean_error():
     args = parse_args(_parser(), ["--walk-forward", "2", "--optimize"])
     with pytest.raises(SystemExit, match="no parameter grid"):
         run(args, momentum_signals, {}, label="X", grid=None)
+
+
+def test_full_run_end_to_end(monkeypatch, tmp_path, capsys, prices):
+    """Every report section, on synthetic data, with all optional analyses on."""
+    import breakout_backtest
+    from backtester import cli
+
+    monkeypatch.setattr(cli, "load_prices", lambda *a, **k: prices)
+    chart = tmp_path / "chart.png"
+    breakout_backtest.main([
+        "--output", str(chart), "--walk-forward", "3", "--optimize", "--cost-sweep",
+        "--vol-target", "0.1", "--save-results", str(tmp_path / "res"),
+    ])
+
+    out = capsys.readouterr().out
+    for section in ("IN-SAMPLE", "OUT-OF-SAMPLE", "Strategy vs Buy & Hold", "Bootstrap",
+                    "COST SENSITIVITY", "WALK-FORWARD", "RE-TUNED", "vol target 10%"):
+        assert section in out
+    assert chart.exists()
+    assert (tmp_path / "res" / "breakout_summary.json").exists()
+
+
+def test_invalid_split_is_rejected(monkeypatch, prices):
+    import momentum_backtest
+
+    with pytest.raises(SystemExit):
+        momentum_backtest.main(["--split", "1.5"])
