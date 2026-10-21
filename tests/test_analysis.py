@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.analysis import sensitivity_grid
+from backtester.analysis import bootstrap_sharpe, sensitivity_grid
 from backtester.engine import split_backtest
 from backtester.metrics import metrics
 from backtester.strategies import momentum_signals
@@ -29,3 +29,32 @@ def test_rejects_unknown_period(prices):
 def test_momentum_rejects_inverted_windows():
     with pytest.raises(ValueError):
         momentum_signals(pd.Series([1.0, 2.0, 3.0]), fast=5, slow=5)
+
+
+def _returns(mean, n=1000, seed=0):
+    rng = np.random.default_rng(seed)
+    return pd.Series(rng.normal(mean, 0.01, n), index=pd.bdate_range("2020-01-01", periods=n))
+
+
+def test_bootstrap_interval_contains_point_estimate():
+    r = _returns(0.0005)
+    out = bootstrap_sharpe(r)
+    assert out["low"] < metrics(r)["Sharpe"] < out["high"]
+
+
+def test_bootstrap_detects_clearly_positive_sharpe():
+    out = bootstrap_sharpe(_returns(0.003))
+    assert out["low"] > 0 and out["p_le_zero"] == 0.0
+
+
+def test_bootstrap_against_itself_is_exactly_zero():
+    r = _returns(0.0005)
+    out = bootstrap_sharpe(r, bench=r)
+    assert out["low"] == out["high"] == 0.0
+
+
+def test_bootstrap_is_reproducible_and_needs_enough_data():
+    r = _returns(0.0005)
+    assert bootstrap_sharpe(r, seed=1) == bootstrap_sharpe(r, seed=1)
+    with pytest.raises(ValueError):
+        bootstrap_sharpe(r.iloc[:30], block=20)

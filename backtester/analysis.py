@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
+import numpy as np
 import pandas as pd
 
 from backtester.engine import split_backtest
@@ -35,3 +36,46 @@ def sensitivity_grid(prices: pd.Series, signal_fn: Callable[..., pd.Series],
             bt = bt_tr if period == "train" else bt_te
             grid.loc[y, x] = metrics(bt["strat_ret"])["Sharpe"]
     return grid
+
+
+def _sharpe(r: np.ndarray, freq: int) -> np.ndarray:
+    """Annualized Sharpe of each row of a 2-D return array."""
+    std = r.std(axis=1, ddof=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = r.mean(axis=1) / std * np.sqrt(freq)
+    return np.where(std > 1e-12, out, 0.0)
+
+
+def bootstrap_sharpe(returns: pd.Series, bench: pd.Series | None = None,
+                     n_boot: int = 2000, block: int = 20, ci: float = 0.95,
+                     seed: int = 0, freq: int = 252) -> dict:
+    """
+    Confidence interval for the Sharpe ratio via a circular block bootstrap.
+
+    Daily returns are resampled in blocks of `block` consecutive days, which
+    keeps short-term autocorrelation and volatility clustering intact (a
+    plain day-by-day bootstrap would understate the uncertainty).
+
+    With `bench`, the same blocks are drawn for both series, giving an
+    interval for the Sharpe DIFFERENCE strategy - benchmark. If that
+    interval contains 0, the data cannot tell the two apart.
+    """
+    r = returns.dropna()
+    n = len(r)
+    if n < 2 * block:
+        raise ValueError(f"need at least {2 * block} returns for block size {block}")
+
+    rng = np.random.default_rng(seed)
+    n_blocks = -(-n // block)  # ceil division
+    starts = rng.integers(0, n, size=(n_boot, n_blocks))
+    idx = ((starts[:, :, None] + np.arange(block)) % n).reshape(n_boot, -1)[:, :n]
+
+    stats = _sharpe(r.to_numpy()[idx], freq)
+    if bench is not None:
+        b = bench.reindex(r.index).fillna(0.0).to_numpy()
+        stats = stats - _sharpe(b[idx], freq)
+
+    alpha = (1 - ci) / 2
+    low, high = np.quantile(stats, [alpha, 1 - alpha])
+    return {"low": float(low), "high": float(high),
+            "p_le_zero": float((stats <= 0).mean())}

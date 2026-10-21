@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 import pandas as pd
 
+from backtester.analysis import bootstrap_sharpe
 from backtester.data import load_prices
 from backtester.engine import optimized_walk_forward, split_backtest, walk_forward
 from backtester.metrics import (
@@ -69,6 +70,7 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
     print_metrics(metrics(bt_te["market_ret"]))
     print("\n  Strategy vs Buy & Hold (test):")
     print_metrics(relative_metrics(bt_te["strat_ret"], bt_te["market_ret"]))
+    print_bootstrap(bt_te)
 
     if args.walk_forward:
         print_walk_forward(walk_forward(prices, position, args.walk_forward, args.cost_bps))
@@ -82,6 +84,16 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
     source = "SYNTHETIC data" if synthetic else args.ticker
     plot_equity(bt_te, label, f"Out-of-Sample Equity Curve — {label} ({source})", args.output)
     print(f"\nSaved chart -> {args.output}")
+
+
+def print_bootstrap(bt: pd.DataFrame) -> None:
+    """95% block-bootstrap intervals: is the test result distinguishable from luck?"""
+    own = bootstrap_sharpe(bt["strat_ret"])
+    diff = bootstrap_sharpe(bt["strat_ret"], bench=bt["market_ret"])
+    print("\n  Bootstrap 95% intervals (test, 20-day blocks):")
+    print(f"  {'Sharpe':<20} [{own['low']:.2f}, {own['high']:.2f}]")
+    print(f"  {'Sharpe - Buy&Hold':<20} [{diff['low']:.2f}, {diff['high']:.2f}]  "
+          f"P(strategy <= buy & hold) = {diff['p_le_zero']:.0%}")
 
 
 def print_walk_forward(folds: list[pd.DataFrame], title: str = "WALK-FORWARD") -> None:
