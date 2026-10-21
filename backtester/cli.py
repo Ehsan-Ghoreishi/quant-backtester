@@ -7,7 +7,13 @@ import pandas as pd
 
 from backtester.data import load_prices
 from backtester.engine import optimized_walk_forward, split_backtest, walk_forward
-from backtester.metrics import metrics, print_metrics, print_trade_stats, trade_stats
+from backtester.metrics import (
+    metrics,
+    print_metrics,
+    print_trade_stats,
+    relative_metrics,
+    trade_stats,
+)
 from backtester.plotting import plot_equity
 
 
@@ -53,6 +59,8 @@ def run(args: argparse.Namespace, signal_fn: Callable[..., pd.Series],
     print_trade_stats(trade_stats(bt_te))
     print("\n  Buy & Hold (test) for comparison:")
     print_metrics(metrics(bt_te["market_ret"]))
+    print("\n  Strategy vs Buy & Hold (test):")
+    print_metrics(relative_metrics(bt_te["strat_ret"], bt_te["market_ret"]))
 
     if args.walk_forward:
         print_walk_forward(walk_forward(prices, position, args.walk_forward, args.cost_bps))

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from backtester.metrics import format_metrics, metrics, trade_stats
+from backtester.metrics import format_metrics, metrics, relative_metrics, trade_stats
 
 
 def test_constant_returns():
@@ -86,3 +86,25 @@ def test_trade_return_is_compounded():
 def test_trade_stats_without_trades():
     s = trade_stats(_bt([0, 0, 0], [0, 0, 0]))
     assert s["Trades"] == 0 and s["Win Rate"] == 0.0 and s["Time in Market"] == 0.0
+
+
+def test_relative_metrics_leveraged_benchmark():
+    b = pd.Series(np.random.default_rng(4).normal(0.0004, 0.01, 1000))
+    m = relative_metrics(2 * b, b)
+    assert m["Beta"] == pytest.approx(2.0)
+    assert m["Alpha (ann.)"] == pytest.approx(0.0, abs=1e-12)
+    assert m["Correlation"] == pytest.approx(1.0)
+
+
+def test_relative_metrics_constant_outperformance():
+    b = pd.Series(np.random.default_rng(5).normal(0.0004, 0.01, 1000))
+    m = relative_metrics(b + 0.0001, b)
+    assert m["Beta"] == pytest.approx(1.0)
+    assert m["Alpha (ann.)"] == pytest.approx(0.0252)
+    assert m["Tracking Error"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_relative_metrics_flat_strategy():
+    b = pd.Series(np.random.default_rng(6).normal(0, 0.01, 100))
+    m = relative_metrics(b * 0, b)
+    assert m["Beta"] == 0.0 and m["Correlation"] == 0.0

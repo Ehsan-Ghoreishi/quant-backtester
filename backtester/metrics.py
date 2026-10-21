@@ -3,7 +3,8 @@
 import numpy as np
 import pandas as pd
 
-PERCENT_KEYS = ("Total Return", "Annualized Return", "Annualized Vol", "Max Drawdown")
+PERCENT_KEYS = ("Total Return", "Annualized Return", "Annualized Vol", "Max Drawdown",
+                "Alpha (ann.)", "Tracking Error")
 
 
 def metrics(returns: pd.Series, freq: int = 252, risk_free: float = 0.0) -> dict:
@@ -91,3 +92,32 @@ def print_trade_stats(stats: dict, indent: str = "  ") -> None:
         else:
             text = f"{v:.1%}"
         print(f"{indent}{k:<20} {text}")
+
+
+def relative_metrics(strat: pd.Series, bench: pd.Series, freq: int = 252) -> dict:
+    """
+    How the strategy relates to its benchmark (here: buy & hold).
+
+    Beta and alpha come from regressing daily strategy returns on daily
+    benchmark returns (alpha annualized, risk-free rate taken as 0).
+    The information ratio is the annualized mean of the return difference
+    divided by its volatility (the tracking error).
+    """
+    df = pd.concat([strat, bench], axis=1, keys=["s", "b"]).dropna()
+    if len(df) < 2 or df["b"].var() <= 1e-18:
+        return {"Beta": 0.0, "Alpha (ann.)": 0.0, "Correlation": 0.0,
+                "Tracking Error": 0.0, "Information Ratio": 0.0}
+
+    beta = df["s"].cov(df["b"]) / df["b"].var()
+    alpha = (df["s"].mean() - beta * df["b"].mean()) * freq
+    active = df["s"] - df["b"]
+    te = active.std() * np.sqrt(freq)
+    ir = active.mean() * freq / te if te > 1e-12 else 0.0
+    corr = df["s"].corr(df["b"]) if df["s"].std() > 1e-12 else 0.0
+    return {
+        "Beta": float(beta),
+        "Alpha (ann.)": float(alpha),
+        "Correlation": float(corr),
+        "Tracking Error": float(te),
+        "Information Ratio": float(ir),
+    }
